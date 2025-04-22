@@ -121,13 +121,14 @@ def aggregate_and_alert():
 schedule.every().day.at("06:00").do(aggregate_and_alert)
 schedule.every().day.at("14:30").do(aggregate_and_alert)
 
-keep_alive()
 
 # Start WebSocket
 ws.trade_stream(symbol="MONUSDT", callback=handle_message)
 
 # Start the heartbeat function to keep the instance alive
 send_heartbeat()
+
+keep_alive()
 
 # Main loop
 while True:
