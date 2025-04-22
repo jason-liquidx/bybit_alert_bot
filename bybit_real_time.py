@@ -43,22 +43,30 @@ def handle_message(message):
     if 'data' not in message:
         return
 
-    trade = message['data']
-    timestamp = datetime.fromtimestamp(trade['T'] / 1000, tz=pytz.utc).astimezone(TIMEZONE)
-    side = trade['S']
-    qty = float(trade['v'])
-    price = float(trade['p'])
+    trades = message['data']
+    if isinstance(trades, dict):  # single trade
+        trades = [trades]
 
-    with lock:
-        trade_data.append({
-            "timestamp": timestamp,
-            "side": side,
-            "qty": qty,
-            "price": price,
-        })
+    for trade in trades:
+        timestamp = datetime.fromtimestamp(trade['T'] / 1000, tz=pytz.utc).astimezone(TIMEZONE)
+        side = trade['S']
+        qty = float(trade['v'])
+        price = float(trade['p'])
+
+        print(f"📥 Trade | {timestamp.strftime('%H:%M:%S')} | Side: {side} | Qty: {qty} | Price: {price}")
+
+        with lock:
+            trade_data.append({
+                "timestamp": timestamp,
+                "side": side,
+                "qty": qty,
+                "price": price,
+            })
+
         # Keep only the last 24h of data
-        cutoff = datetime.now(TIMEZONE) - timedelta(hours=24)
-        trade_data[:] = [t for t in trade_data if t["timestamp"] > cutoff]
+        with lock:
+            cutoff = datetime.now(TIMEZONE) - timedelta(hours=24)
+            trade_data[:] = [t for t in trade_data if t["timestamp"] > cutoff]
 
 def send_email(subject, body):
     sender = os.getenv("EMAIL_SENDER")
