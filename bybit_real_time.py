@@ -47,18 +47,18 @@ def handle_message(message):
 
 def send_email(subject, body):
     sender = os.getenv("EMAIL_SENDER")
-    recipient = os.getenv("EMAIL_RECIPIENT")
+    recipients = os.getenv("EMAIL_RECIPIENTS").split(",")  # Split the string into a list of email addresses
     password = os.getenv("EMAIL_PASSWORD")
 
     msg = MIMEText(body)
     msg["Subject"] = subject
     msg["From"] = sender
-    msg["To"] = recipient
+    msg["To"] = ", ".join(recipients)  # Join the list of recipients into a string for the "To" header
 
     try:
         server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
         server.login(sender, password)
-        server.sendmail(sender, recipient, msg.as_string())
+        server.sendmail(sender, recipients, msg.as_string())  # Send to multiple recipients
         server.quit()
         print("✅ Email sent.")
     except Exception as e:
