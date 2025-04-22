@@ -1,3 +1,4 @@
 pybit
 python-dotenv
 pytz
+schedule
