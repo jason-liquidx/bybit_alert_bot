@@ -18,7 +18,7 @@ app = Flask('')
 
 @app.route('/')
 def home():
-    return "✅ I'm alive"
+    return "✅ I'm alive on Render"
 
 def run_web():
     app.run(host='0.0.0.0', port=10000)
