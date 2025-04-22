@@ -92,12 +92,12 @@ def aggregate_and_alert():
     send_email("🪙 Bybit MONUSDT 24h Report", body)
 
 # Schedule report at 6AM and 6PM Malaysia Time
-# schedule.every().day.at("06:00").do(aggregate_and_alert)
-# schedule.every().day.at("18:00").do(aggregate_and_alert)
+schedule.every().day.at("06:00").do(aggregate_and_alert)
+schedule.every().day.at("18:00").do(aggregate_and_alert)
 
 # Start WebSocket
 ws.trade_stream(symbol="MONUSDT", callback=handle_message)
-Timer(2 * 3600, aggregate_and_alert).start()
+# Timer(2 * 3600, aggregate_and_alert).start()
 
 # Main loop
 while True:
