@@ -1,0 +1,4 @@
+pybit
+python-dotenv
+pytz
+smtplib
