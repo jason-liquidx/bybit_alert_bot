@@ -53,7 +53,7 @@ def handle_message(message):
         qty = float(trade['v'])
         price = float(trade['p'])
 
-        print(f"📥 Trade | {timestamp.strftime('%H:%M:%S')} | Side: {side} | Qty: {qty} | Price: {price}")
+        print(f"📥 Trade | {timestamp.strftime('%H:%M:%S')} | Side: {side} | Qty: {qty} | Price: {price}", flush=True)
 
         with lock:
             trade_data.append({
