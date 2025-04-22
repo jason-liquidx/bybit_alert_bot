@@ -1,16 +1,18 @@
 from pybit.unified_trading import WebSocket
 from datetime import datetime, timedelta
-from threading import Timer, Lock
+from threading import Lock
 from time import sleep
 import smtplib
 from email.mime.text import MIMEText
 import pytz
 import os
+import schedule
+from collections import defaultdict
 from dotenv import load_dotenv
 load_dotenv()
 
-# Timezone
-TIMEZONE = pytz.utc
+# Malaysia Timezone
+TIMEZONE = pytz.timezone("Asia/Kuala_Lumpur")
 
 # Trade storage
 trade_data = []
@@ -27,7 +29,7 @@ def handle_message(message):
         return
 
     trade = message['data']
-    timestamp = datetime.fromtimestamp(trade['T'] / 1000, tz=TIMEZONE)
+    timestamp = datetime.fromtimestamp(trade['T'] / 1000, tz=pytz.utc).astimezone(TIMEZONE)
     side = trade['S']
     qty = float(trade['v'])
     price = float(trade['p'])
@@ -39,8 +41,8 @@ def handle_message(message):
             "qty": qty,
             "price": price,
         })
-        # Keep only the last 24h of data
-        cutoff = datetime.now(tz=TIMEZONE) - timedelta(hours=24)
+        # Keep only last 24h of data
+        cutoff = datetime.now(TIMEZONE) - timedelta(hours=24)
         trade_data[:] = [t for t in trade_data if t["timestamp"] > cutoff]
 
 def send_email(subject, body):
@@ -64,33 +66,40 @@ def send_email(subject, body):
 
 def aggregate_and_alert():
     with lock:
-        now = datetime.now(tz=TIMEZONE)
+        now = datetime.now(TIMEZONE)
         cutoff = now - timedelta(hours=24)
         recent = [t for t in trade_data if t["timestamp"] > cutoff]
 
         buy_volume = sum(t["qty"] for t in recent if t["side"] == "Buy")
         sell_volume = sum(t["qty"] for t in recent if t["side"] == "Sell")
         usd_volume = sum(t["qty"] * t["price"] for t in recent)
-        total = len(recent)
-        buy_freq = (sum(1 for t in recent if t["side"] == "Buy") / total * 100) if total else 0
+
+        # Count how many unique minutes had at least one trade
+        minute_buckets = defaultdict(int)
+        for t in recent:
+            minute_key = t["timestamp"].replace(second=0, microsecond=0)
+            minute_buckets[minute_key] += 1
+
+        trading_freq = (len(minute_buckets) / 1440) * 100
 
     body = (
         f"Time: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}\n"
         f"Buy Volume: {buy_volume:.2f}\n"
         f"Sell Volume: {sell_volume:.2f}\n"
         f"USD Volume: {usd_volume:.2f}\n"
-        f"Buy Frequency: {buy_freq:.2f}%"
+        f"Trading Frequency (last 24h): {trading_freq:.2f}%"
     )
-    send_email("🪙 MONUSDT 24h Report", body)
+    send_email("🪙 Bybit MONUSDT 24h Report", body)
 
-    # Schedule next alert
-    Timer(0.5 * 3600, aggregate_and_alert).start()
+# Schedule report at 6AM and 6PM Malaysia Time
+# schedule.every().day.at("06:00").do(aggregate_and_alert)
+# schedule.every().day.at("18:00").do(aggregate_and_alert)
 
-# Start WebSocket and reporting
+# Start WebSocket
 ws.trade_stream(symbol="MONUSDT", callback=handle_message)
-Timer(0.5 * 3600, aggregate_and_alert).start()
+Timer(2 * 3600, aggregate_and_alert).start()
 
+# Main loop
 while True:
+    schedule.run_pending()
     sleep(1)
-
-
