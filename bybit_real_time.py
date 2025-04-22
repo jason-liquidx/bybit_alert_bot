@@ -90,7 +90,20 @@ def send_email(subject, body):
 def aggregate_and_alert():
     with lock:
         now = datetime.now(TIMEZONE)
-        cutoff = now - timedelta(hours=24)
+
+        if now.hour == 6:
+            cutoff = now - timedelta(hours=6)
+            window_desc = "Past 6 hours (from 12:00 AM to 6:00 AM)"
+            max_minutes = 6 * 60
+        elif now.hour == 18:
+            cutoff = now - timedelta(hours=18)
+            window_desc = "Past 18 hours (from 12:00 AM to 6:00 PM)"
+            max_minutes = 18 * 60
+        else:
+            cutoff = now - timedelta(hours=24)
+            window_desc = "Fallback: Past 24 hours"
+            max_minutes = 24 * 60
+
         recent = [t for t in trade_data if t["timestamp"] > cutoff]
 
         buy_volume = sum(t["qty"] for t in recent if t["side"] == "Buy")
@@ -102,25 +115,22 @@ def aggregate_and_alert():
             minute_key = t["timestamp"].replace(second=0, microsecond=0)
             minute_buckets[minute_key] += 1
 
-        trading_freq = (len(minute_buckets) / 1440) * 100
+        trading_freq = (len(minute_buckets) / max_minutes) * 100
 
     body = (
         f"Time: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}\n"
-        f"Buy Volume: {buy_volume:.2f}\n"
-        f"Sell Volume: {sell_volume:.2f}\n"
-        f"USD Volume: {usd_volume:.2f}\n"
-        f"Trading Frequency (last 24h): {trading_freq:.2f}%"
+        f"{window_desc}\n\n"
+        f"📊 Buy Volume: {buy_volume:.2f}\n"
+        f"📉 Sell Volume: {sell_volume:.2f}\n"
+        f"💵 USD Volume: {usd_volume:.2f}\n"
+        f"📈 Trading Frequency: {trading_freq:.2f}%"
     )
-    send_email("🪙 Bybit MONUSDT 24h Report", body)
+    send_email("🪙 Bybit MONUSDT Report", body)
+
 
 def schedule_loop():
-    schedule.every().day.at("06:00").do(aggregate_and_alert)
-    schedule.every().day.at("08:00").do(aggregate_and_alert)
-    schedule.every().day.at("09:00").do(aggregate_and_alert)
-
-    schedule.every().day.at("15:30").do(aggregate_and_alert)
-    schedule.every().day.at("16:30").do(aggregate_and_alert)
-    schedule.every().day.at("17:30").do(aggregate_and_alert)
+    schedule.every().day.at("10:00").do(aggregate_and_alert)
+    schedule.every().day.at("22:00").do(aggregate_and_alert)
 
     while True:
         schedule.run_pending()
