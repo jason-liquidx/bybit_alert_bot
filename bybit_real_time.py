@@ -3,55 +3,82 @@ from datetime import datetime, timedelta
 from threading import Lock, Thread
 from time import sleep
 from flask import Flask
-import schedule
 import smtplib
 from email.mime.text import MIMEText
 import pytz
 import os
+import schedule
 from collections import defaultdict
 from dotenv import load_dotenv
 load_dotenv()
 
-# Malaysia Timezone
+# Setup timezone
 TIMEZONE = pytz.timezone("Asia/Kuala_Lumpur")
 
-# Email setup
-EMAIL_SENDER = os.getenv("EMAIL_SENDER")
-EMAIL_RECIPIENTS = os.getenv("EMAIL_RECIPIENTS", "").split(",")
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
-
-# Global trade data store
-trade_data = []
-lock = Lock()
-
-# Flask setup
+# Flask app
 app = Flask(__name__)
 
-@app.route('/')
+@app.route("/")
 def home():
-    return "✅ Bot is running"
+    return "✅ Heartbeat check — service is running."
 
-def run_web():
-    port = int(os.environ.get("PORT", 8080))  # Default to 8080 if PORT is not set
-    app.run(host="0.0.0.0", port=port)
-    
-# Email alert function
+# Trade storage
+trade_data = []
+lock = Lock()
+ws = None
+
+def start_websocket():
+    global ws
+    while True:
+        try:
+            ws = WebSocket(testnet=False, channel_type="spot")
+            ws.trade_stream(symbol="MONUSDT", callback=handle_message)
+            print("🔌 WebSocket connected.")
+            break
+        except Exception as e:
+            print(f"❌ WebSocket connection failed: {e}")
+            sleep(5)
+
+def handle_message(message):
+    if 'data' not in message:
+        return
+
+    trade = message['data']
+    timestamp = datetime.fromtimestamp(trade['T'] / 1000, tz=pytz.utc).astimezone(TIMEZONE)
+    side = trade['S']
+    qty = float(trade['v'])
+    price = float(trade['p'])
+
+    with lock:
+        trade_data.append({
+            "timestamp": timestamp,
+            "side": side,
+            "qty": qty,
+            "price": price,
+        })
+        # Keep only the last 24h of data
+        cutoff = datetime.now(TIMEZONE) - timedelta(hours=24)
+        trade_data[:] = [t for t in trade_data if t["timestamp"] > cutoff]
+
 def send_email(subject, body):
+    sender = os.getenv("EMAIL_SENDER")
+    recipients = os.getenv("EMAIL_RECIPIENTS").split(",")
+    password = os.getenv("EMAIL_PASSWORD")
+
     msg = MIMEText(body)
     msg["Subject"] = subject
-    msg["From"] = EMAIL_SENDER
-    msg["To"] = ", ".join(EMAIL_RECIPIENTS)
+    msg["From"] = sender
+    msg["To"] = ", ".join(recipients)
 
     try:
         server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
-        server.login(EMAIL_SENDER, EMAIL_PASSWORD)
-        server.sendmail(EMAIL_SENDER, EMAIL_RECIPIENTS, msg.as_string())
+        server.login(sender, password)
+        server.sendmail(sender, recipients, msg.as_string())
         server.quit()
         print("✅ Email sent.")
     except Exception as e:
         print(f"❌ Email error: {e}")
 
-# Aggregation logic
 def aggregate_and_alert():
     with lock:
         now = datetime.now(TIMEZONE)
@@ -78,51 +105,23 @@ def aggregate_and_alert():
     )
     send_email("🪙 Bybit MONUSDT 24h Report", body)
 
-# Schedule report
-schedule.every().day.at("06:00").do(aggregate_and_alert)
-schedule.every().day.at("15:15").do(aggregate_and_alert)
+def schedule_loop():
+    schedule.every().day.at("06:00").do(aggregate_and_alert)
+    schedule.every().day.at("15:30").do(aggregate_and_alert)
 
-# WebSocket logic
-def handle_message(message):
-    if 'data' not in message:
-        return
-    trade = message['data']
-    timestamp = datetime.fromtimestamp(trade['T'] / 1000, tz=pytz.utc).astimezone(TIMEZONE)
-    side = trade['S']
-    qty = float(trade['v'])
-    price = float(trade['p'])
-
-    with lock:
-        trade_data.append({
-            "timestamp": timestamp,
-            "side": side,
-            "qty": qty,
-            "price": price,
-        })
-        cutoff = datetime.now(TIMEZONE) - timedelta(hours=24)
-        trade_data[:] = [t for t in trade_data if t["timestamp"] > cutoff]
-
-def run_ws():
-    while True:
-        try:
-            ws = WebSocket(testnet=False, channel_type="spot")
-            ws.trade_stream(symbol="MONUSDT", callback=handle_message)
-            print("🔌 WebSocket connected.")
-            while True:
-                sleep(1)
-        except Exception as e:
-            print(f"⚠️ WebSocket error: {e}")
-            sleep(5)
-            print("🔁 Reconnecting...")
-
-# Schedule loop
-def run_schedule():
     while True:
         schedule.run_pending()
         sleep(1)
 
-# Start everything
-if __name__ == "__main__":
+def run_web():
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
+
+def start():
+    # Run Flask app and tasks in parallel threads
     Thread(target=run_web).start()
-    Thread(target=run_ws).start()
-    Thread(target=run_schedule).start()
+    Thread(target=start_websocket).start()
+    Thread(target=schedule_loop).start()
+
+if __name__ == "__main__":
+    start()
