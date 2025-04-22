@@ -107,6 +107,9 @@ def aggregate_and_alert():
 
 def schedule_loop():
     schedule.every().day.at("06:00").do(aggregate_and_alert)
+        schedule.every().day.at("08:00").do(aggregate_and_alert)
+    schedule.every().day.at("09:00").do(aggregate_and_alert)
+
     schedule.every().day.at("15:30").do(aggregate_and_alert)
 
     while True:
