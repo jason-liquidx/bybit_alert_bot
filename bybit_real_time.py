@@ -119,7 +119,7 @@ def aggregate_and_alert():
 
 # Schedule report at 6AM and 6PM Malaysia Time
 schedule.every().day.at("06:00").do(aggregate_and_alert)
-schedule.every().day.at("14:00").do(aggregate_and_alert)
+schedule.every().day.at("14:30").do(aggregate_and_alert)
 
 keep_alive()
 
