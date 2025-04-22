@@ -24,6 +24,15 @@ ws = WebSocket(
     channel_type="spot",
 )
 
+# Heartbeat interval (seconds)
+HEARTBEAT_INTERVAL = 60  # Send a heartbeat every 90 seconds
+
+# Send heartbeat to keep the instance alive
+def send_heartbeat():
+    print("💓 Heartbeat: Keeping the instance alive.")
+    sleep(HEARTBEAT_INTERVAL)
+    send_heartbeat()  # Call itself to repeat every interval
+
 def handle_message(message):
     if 'data' not in message:
         return
@@ -97,7 +106,9 @@ schedule.every().day.at("14:00").do(aggregate_and_alert)
 
 # Start WebSocket
 ws.trade_stream(symbol="MONUSDT", callback=handle_message)
-# Timer(2 * 3600, aggregate_and_alert).start()
+
+# Start the heartbeat function to keep the instance alive
+send_heartbeat()
 
 # Main loop
 while True:
