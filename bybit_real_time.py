@@ -111,6 +111,8 @@ def schedule_loop():
     schedule.every().day.at("09:00").do(aggregate_and_alert)
 
     schedule.every().day.at("15:30").do(aggregate_and_alert)
+    schedule.every().day.at("16:30").do(aggregate_and_alert)
+    schedule.every().day.at("17:30").do(aggregate_and_alert)
 
     while True:
         schedule.run_pending()
