@@ -84,11 +84,11 @@ def aggregate_and_alert():
     send_email("🪙 MONUSDT 24h Report", body)
 
     # Schedule next alert
-    Timer(0.02 * 3600, aggregate_and_alert).start()
+    Timer(0.5 * 3600, aggregate_and_alert).start()
 
 # Start WebSocket and reporting
 ws.trade_stream(symbol="MONUSDT", callback=handle_message)
-Timer(0.02 * 3600, aggregate_and_alert).start()
+Timer(0.5 * 3600, aggregate_and_alert).start()
 
 while True:
     sleep(1)
