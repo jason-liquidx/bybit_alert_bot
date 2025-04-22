@@ -93,7 +93,7 @@ def aggregate_and_alert():
 
 # Schedule report at 6AM and 6PM Malaysia Time
 schedule.every().day.at("06:00").do(aggregate_and_alert)
-schedule.every().day.at("18:00").do(aggregate_and_alert)
+schedule.every().day.at("14:00").do(aggregate_and_alert)
 
 # Start WebSocket
 ws.trade_stream(symbol="MONUSDT", callback=handle_message)
