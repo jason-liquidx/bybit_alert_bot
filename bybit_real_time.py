@@ -11,6 +11,23 @@ from collections import defaultdict
 from dotenv import load_dotenv
 load_dotenv()
 
+from flask import Flask
+from threading import Thread
+
+app = Flask('')
+
+@app.route('/')
+def home():
+    return "✅ I'm alive"
+
+def run_web():
+    app.run(host='0.0.0.0', port=8080)
+
+def keep_alive():
+    t = Thread(target=run_web)
+    t.daemon = True
+    t.start()
+
 # Malaysia Timezone
 TIMEZONE = pytz.timezone("Asia/Kuala_Lumpur")
 
@@ -103,6 +120,8 @@ def aggregate_and_alert():
 # Schedule report at 6AM and 6PM Malaysia Time
 schedule.every().day.at("06:00").do(aggregate_and_alert)
 schedule.every().day.at("14:00").do(aggregate_and_alert)
+
+keep_alive()
 
 # Start WebSocket
 ws.trade_stream(symbol="MONUSDT", callback=handle_message)
