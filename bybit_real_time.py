@@ -8,8 +8,10 @@ from email.mime.text import MIMEText
 import pytz
 import os
 import schedule
+import logging
 from collections import defaultdict
 from dotenv import load_dotenv
+
 load_dotenv()
 
 # Setup timezone
@@ -26,6 +28,12 @@ def home():
 trade_data = []
 lock = Lock()
 ws = None
+
+# Setup logging for heartbeat
+logging.basicConfig(level=logging.INFO)
+
+def log_heartbeat():
+    logging.info("✅ Heartbeat check — service is running.")
 
 def start_websocket():
     global ws
@@ -136,15 +144,20 @@ def schedule_loop():
         schedule.run_pending()
         sleep(1)
 
+def schedule_heartbeat():
+    # Schedule heartbeat to run every minute
+    schedule.every(1).minute.do(log_heartbeat)
+
 def run_web():
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
 
 def start():
-    # Run Flask app and tasks in parallel threads
+    # Run Flask app, WebSocket, tasks, and heartbeat scheduler in parallel threads
     Thread(target=run_web).start()
     Thread(target=start_websocket).start()
     Thread(target=schedule_loop).start()
+    Thread(target=schedule_heartbeat).start()  # Start heartbeat logging thread
 
 if __name__ == "__main__":
     start()
