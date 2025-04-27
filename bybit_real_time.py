@@ -125,14 +125,14 @@ def aggregate_and_alert():
 
         trading_freq = (len(minute_buckets) / max_minutes) * 100
 
-    body = (
-        f"Time: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}\n"
-        f"{window_desc}\n\n"
-        f"📊 Buy Volume: {buy_volume:.2f}\n"
-        f"📉 Sell Volume: {sell_volume:.2f}\n"
-        f"💵 USD Volume: {usd_volume:.2f}\n"
-        f"📈 Trading Frequency: {trading_freq:.2f}%"
-    )
+        body = (
+            f"Time: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}\n"
+            f"{window_desc}\n\n"
+            f"📊 Buy Volume: {int(buy_volume):,}\n"
+            f"📉 Sell Volume: {int(sell_volume):,}\n"
+            f"💵 USD Volume: {int(usd_volume):,}\n"
+            f"📈 Trading Frequency: {trading_freq:.2f}%"
+        )
     send_email("🪙 Bybit MONUSDT Report", body)
 
 
