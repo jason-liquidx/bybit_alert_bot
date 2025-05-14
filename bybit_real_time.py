@@ -29,8 +29,9 @@ trade_data = []
 lock = Lock()
 ws = None
 
-# Setup logging
+# Configure logging
 logging.basicConfig(level=logging.INFO)
+logging.getLogger("pybit._websocket_stream").setLevel(logging.ERROR)
 
 def log_heartbeat():
     logging.info("✅ Heartbeat check — service is running.")
@@ -39,7 +40,7 @@ def start_websocket():
     global ws
     while True:
         try:
-            ws = WebSocket(testnet=False, channel_type="spot")
+            ws = WebSocket(testnet=False, channel_type="spot", ping_interval=None)  # Disable auto ping/pong
             ws.trade_stream(symbol="MONUSDT", callback=handle_message)
             print("🔌 WebSocket connected.")
             break
@@ -71,8 +72,7 @@ def handle_message(message):
                 "price": price,
             })
 
-        # Keep only the last 24h of data
-        with lock:
+            # Keep only the last 24h of data
             cutoff = datetime.now(TIMEZONE) - timedelta(hours=24)
             trade_data[:] = [t for t in trade_data if t["timestamp"] > cutoff]
 
@@ -126,7 +126,7 @@ def aggregate_and_alert():
         trading_freq = (len(minute_buckets) / max_minutes) * 100
 
         body = (
-            f"Date: {now.strftime('%Y-%m-%d')}\n"
+            f"Time: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}\n"
             f"{window_desc}\n\n"
             f"📊 Buy Volume: {int(buy_volume):,}\n"
             f"📉 Sell Volume: {int(sell_volume):,}\n"
@@ -138,7 +138,6 @@ def aggregate_and_alert():
 def schedule_loop():
     schedule.every().day.at("10:00").do(aggregate_and_alert)
     schedule.every().day.at("22:00").do(aggregate_and_alert)
-
     while True:
         schedule.run_pending()
         sleep(1)
@@ -146,33 +145,15 @@ def schedule_loop():
 def schedule_heartbeat():
     schedule.every(1).minute.do(log_heartbeat)
 
-    while True:
-        schedule.run_pending()
-        sleep(1)
-
 def run_web():
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
 
-def safe_thread(target):
-    def wrapper():
-        while True:
-            try:
-                target()
-            except Exception as e:
-                logging.error(f"Thread crashed: {e}", exc_info=True)
-                sleep(3)  # wait a bit before restarting
-    t = Thread(target=wrapper)
-    t.daemon = True
-    t.start()
-
 def start():
-    safe_thread(run_web)
-    safe_thread(start_websocket)
-    safe_thread(schedule_loop)
-    safe_thread(schedule_heartbeat)
+    Thread(target=run_web).start()
+    Thread(target=start_websocket).start()
+    Thread(target=schedule_loop).start()
+    Thread(target=schedule_heartbeat).start()
 
 if __name__ == "__main__":
     start()
-    while True:
-        sleep(60)  # Keep main thread alive
