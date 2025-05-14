@@ -29,7 +29,7 @@ trade_data = []
 lock = Lock()
 ws = None
 
-# Setup logging for heartbeat
+# Setup logging
 logging.basicConfig(level=logging.INFO)
 
 def log_heartbeat():
@@ -126,7 +126,7 @@ def aggregate_and_alert():
         trading_freq = (len(minute_buckets) / max_minutes) * 100
 
         body = (
-            f"Time: {now.strftime('%Y-%m-%d %H:%M:%S %Z')}\n"
+            f"Date: {now.strftime('%Y-%m-%d')}\n"
             f"{window_desc}\n\n"
             f"📊 Buy Volume: {int(buy_volume):,}\n"
             f"📉 Sell Volume: {int(sell_volume):,}\n"
@@ -134,7 +134,6 @@ def aggregate_and_alert():
             f"📈 Trading Frequency: {trading_freq:.2f}%"
         )
     send_email("🪙 Bybit MONUSDT Report", body)
-
 
 def schedule_loop():
     schedule.every().day.at("10:00").do(aggregate_and_alert)
@@ -145,19 +144,35 @@ def schedule_loop():
         sleep(1)
 
 def schedule_heartbeat():
-    # Schedule heartbeat to run every minute
     schedule.every(1).minute.do(log_heartbeat)
+
+    while True:
+        schedule.run_pending()
+        sleep(1)
 
 def run_web():
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
 
+def safe_thread(target):
+    def wrapper():
+        while True:
+            try:
+                target()
+            except Exception as e:
+                logging.error(f"Thread crashed: {e}", exc_info=True)
+                sleep(3)  # wait a bit before restarting
+    t = Thread(target=wrapper)
+    t.daemon = True
+    t.start()
+
 def start():
-    # Run Flask app, WebSocket, tasks, and heartbeat scheduler in parallel threads
-    Thread(target=run_web).start()
-    Thread(target=start_websocket).start()
-    Thread(target=schedule_loop).start()
-    Thread(target=schedule_heartbeat).start()  # Start heartbeat logging thread
+    safe_thread(run_web)
+    safe_thread(start_websocket)
+    safe_thread(schedule_loop)
+    safe_thread(schedule_heartbeat)
 
 if __name__ == "__main__":
     start()
+    while True:
+        sleep(60)  # Keep main thread alive
