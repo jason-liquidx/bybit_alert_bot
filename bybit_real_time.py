@@ -40,13 +40,18 @@ def start_websocket():
     global ws
     while True:
         try:
-            ws = WebSocket(testnet=False, channel_type="spot", ping_interval=None)  # Disable auto ping/pong
+            ws = WebSocket(testnet=False, channel_type="spot", ping_interval=None)
             ws.trade_stream(symbol="MONUSDT", callback=handle_message)
             print("🔌 WebSocket connected.")
-            break
+
+            # Block here until WebSocket fails
+            while True:
+                sleep(60)
+
         except Exception as e:
-            print(f"❌ WebSocket connection failed: {e}")
-            sleep(5)
+            print(f"❌ WebSocket error: {e}")
+            sleep(5)  # Wait before retrying
+
 
 def handle_message(message):
     if 'data' not in message:
