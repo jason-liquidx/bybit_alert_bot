@@ -160,5 +160,6 @@ def start():
     Thread(target=schedule_loop).start()
     Thread(target=schedule_heartbeat).start()
 
-if __name__ == "__main__":
-    start()
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 5000))  # <-- required for Render
+    app.run(host='0.0.0.0', port=port)
