@@ -1,4 +1,4 @@
-from pybit import WebSocketManager
+from pybit import WebSocket
 from datetime import datetime, timedelta
 from threading import Lock, Thread
 from time import sleep
