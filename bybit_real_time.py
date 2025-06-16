@@ -36,21 +36,22 @@ logging.getLogger("pybit._websocket_stream").setLevel(logging.ERROR)
 def log_heartbeat():
     logging.info("✅ Heartbeat check — service is running.")
 
+def handle_message(message):
+    print("📥", message)
+
 def start_websocket():
-    global ws
     while True:
         try:
-            ws = WebSocketManager(domain="https://api.bybit.com", websocket_type="spot")
-            ws.subscribe_trade_stream("MONUSDT", handle_message)
-            print("🔌 WebSocket connected.")
-
+            ws = WebSocket(
+                endpoint="wss://stream.bybit.com/spot/quote/ws/v1",  # Spot endpoint
+                subscriptions=["trade.MONUSDT"]
+            )
+            ws.socket.on_message = lambda ws_, msg: handle_message(eval(msg))
+            print("✅ WebSocket connected")
             while True:
                 sleep(60)
-                if not ws.is_alive():
-                    raise Exception("WebSocket disconnected")
-
         except Exception as e:
-            print(f"❌ WebSocket error: {e}")
+            print("❌ WebSocket error:", e)
             sleep(5)
 
 
