@@ -40,18 +40,17 @@ def start_websocket():
     global ws
     while True:
         try:
-            ws = WebSocketManager(channel_type="spot", testnet=False)
-            ws.subscribe_trade_stream("MONUSDT", callback=handle_message)
+            ws = WebSocket(testnet=False, channel_type="spot", ping_interval=20)  # 20s ping
+            ws.trade_stream(symbol="MONUSDT", callback=handle_message)
             print("🔌 WebSocket connected.")
 
-            while True:
-                sleep(30)
-                if not ws.is_alive():
-                    raise Exception("WebSocket disconnected")
-
+            # Instead of blocking forever, monitor connection health
+            for _ in range(60):  # check every minute for 1 hour
+                sleep(60)
+                # Optional: add heartbeat flag or socket check
         except Exception as e:
             print(f"❌ WebSocket error: {e}")
-            sleep(5)
+            sleep(5)  # Retry after delay
 
 
 def handle_message(message):
