@@ -1,4 +1,4 @@
-from pybit.unified_trading import WebSocket
+from pybit.unified_trading import WebSocketManager
 from datetime import datetime, timedelta
 from threading import Lock, Thread
 from time import sleep
@@ -40,17 +40,18 @@ def start_websocket():
     global ws
     while True:
         try:
-            ws = WebSocket(testnet=False, channel_type="spot", ping_interval=None)
-            ws.trade_stream(symbol="MONUSDT", callback=handle_message)
+            ws = WebSocketManager(channel_type="spot", testnet=False)
+            ws.subscribe_trade_stream("MONUSDT", callback=handle_message)
             print("🔌 WebSocket connected.")
 
-            # Block here until WebSocket fails
             while True:
-                sleep(60)
+                sleep(30)
+                if not ws.is_alive():
+                    raise Exception("WebSocket disconnected")
 
         except Exception as e:
             print(f"❌ WebSocket error: {e}")
-            sleep(5)  # Wait before retrying
+            sleep(5)
 
 
 def handle_message(message):
