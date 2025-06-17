@@ -1,4 +1,4 @@
-pybit==1.1.18
+pybit==5.11.0
 python-dotenv
 pytz
 schedule
