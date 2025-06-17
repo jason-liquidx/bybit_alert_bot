@@ -17,9 +17,6 @@ load_dotenv()
 # Timezone config
 TIMEZONE = pytz.timezone("Asia/Kuala_Lumpur")
 
-# Flask app for Render + UptimeRobot
-app = Flask(__name__)
-
 @app.route("/")
 def home():
     return "✅ Heartbeat check — service is running."
