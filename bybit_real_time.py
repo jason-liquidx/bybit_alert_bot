@@ -17,7 +17,7 @@ load_dotenv()
 # Timezone config
 TIMEZONE = pytz.timezone("Asia/Kuala_Lumpur")
 
-@app.route("/")
+app = Flask(__name__)
 def home():
     return "✅ Heartbeat check — service is running."
 
