@@ -122,11 +122,9 @@ def aggregate_and_alert():
 def start_websocket():
     while True:
         try:
-            ws = WebSocket(
-                endpoint="wss://stream.bybit.com/spot/quote/ws/v1",
-                subscriptions=["trade.MONUSDT"],
-                callback=handle_message  # ✅ KEY FIX
-            )
+            ws = WebSocket("wss://stream.bybit.com/spot/quote/ws/v1")
+            ws.trade_stream("MONUSDT", handle_message)
+
             print("✅ WebSocket connected")
             while True:
                 sleep(60)
