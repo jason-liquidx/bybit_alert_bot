@@ -1,4 +1,4 @@
-from pybit import WebSocket
+from pybit.unified_trading import WebSocket
 from datetime import datetime, timedelta
 from threading import Lock, Thread
 from time import sleep
@@ -14,25 +14,27 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Timezone config
+# Setup timezone
 TIMEZONE = pytz.timezone("Asia/Kuala_Lumpur")
 
+# Flask app for uptime checks
 app = Flask(__name__)
+
+@app.route("/")
 def home():
     return "✅ Heartbeat check — service is running."
 
-# Global storage
+# Trade storage
 trade_data = []
 lock = Lock()
 
-# Logging config
+# Configure logging
 logging.basicConfig(level=logging.INFO)
-logging.getLogger("pybit._websocket_stream").setLevel(logging.ERROR)
 
 def log_heartbeat():
     logging.info("✅ Heartbeat check — service is running.")
 
-def handle_message(message):
+def handle_trade_message(message):
     if 'data' not in message:
         return
 
@@ -56,9 +58,26 @@ def handle_message(message):
                 "price": price,
             })
 
-            # Keep only last 24h
             cutoff = datetime.now(TIMEZONE) - timedelta(hours=24)
             trade_data[:] = [t for t in trade_data if t["timestamp"] > cutoff]
+
+def start_websocket():
+    while True:
+        try:
+            ws = WebSocket(
+                testnet=False,
+                channel_type="spot"
+            )
+            ws.trade_stream(
+                symbol="MONUSDT",
+                callback=handle_trade_message
+            )
+            print("✅ WebSocket connected")
+            while True:
+                sleep(60)
+        except Exception as e:
+            print("❌ WebSocket error:", e)
+            sleep(5)
 
 def send_email(subject, body):
     sender = os.getenv("EMAIL_SENDER")
@@ -85,11 +104,11 @@ def aggregate_and_alert():
 
         if now.hour == 6:
             cutoff = now - timedelta(hours=6)
-            window_desc = "Past 6 hours (12:00 AM to 6:00 AM)"
+            window_desc = "Past 6 hours (12 AM to 6 AM)"
             max_minutes = 6 * 60
         elif now.hour == 18:
             cutoff = now - timedelta(hours=18)
-            window_desc = "Past 18 hours (12:00 AM to 6:00 PM)"
+            window_desc = "Past 18 hours (12 AM to 6 PM)"
             max_minutes = 18 * 60
         else:
             cutoff = now - timedelta(hours=24)
@@ -97,6 +116,7 @@ def aggregate_and_alert():
             max_minutes = 24 * 60
 
         recent = [t for t in trade_data if t["timestamp"] > cutoff]
+
         buy_volume = sum(t["qty"] for t in recent if t["side"] == "Buy")
         sell_volume = sum(t["qty"] for t in recent if t["side"] == "Sell")
         usd_volume = sum(t["qty"] * t["price"] for t in recent)
@@ -116,21 +136,7 @@ def aggregate_and_alert():
             f"💵 USD Volume: {int(usd_volume):,}\n"
             f"📈 Trading Frequency: {trading_freq:.2f}%"
         )
-
     send_email("🪙 Bybit MONUSDT Report", body)
-
-def start_websocket():
-    while True:
-        try:
-            ws = WebSocket("wss://stream.bybit.com/spot/quote/ws/v1")
-            ws.trade_stream("MONUSDT", handle_message)
-
-            print("✅ WebSocket connected")
-            while True:
-                sleep(60)
-        except Exception as e:
-            print(f"❌ WebSocket error: {e}")
-            sleep(5)
 
 def schedule_loop():
     schedule.every().day.at("06:00").do(aggregate_and_alert)
