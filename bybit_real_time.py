@@ -139,8 +139,8 @@ def aggregate_and_alert():
     send_email("🪙 Bybit MONUSDT Report", body)
 
 def schedule_loop():
-    schedule.every().day.at("06:00").do(aggregate_and_alert)
-    schedule.every().day.at("18:00").do(aggregate_and_alert)
+    schedule.every().day.at("22:00").do(aggregate_and_alert)
+    schedule.every().day.at("10:00").do(aggregate_and_alert)
     while True:
         schedule.run_pending()
         sleep(1)
