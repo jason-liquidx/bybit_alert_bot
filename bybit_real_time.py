@@ -24,17 +24,20 @@ app = Flask(__name__)
 def home():
     return "✅ Heartbeat check — service is running."
 
-# Trade storage
+# Global trade store
 trade_data = []
 lock = Lock()
+last_trade_time = datetime.now(TIMEZONE)
 
-# Configure logging
+# Logging setup
 logging.basicConfig(level=logging.INFO)
 
 def log_heartbeat():
     logging.info("✅ Heartbeat check — service is running.")
 
 def handle_trade_message(message):
+    global last_trade_time
+
     if 'data' not in message:
         return
 
@@ -50,6 +53,8 @@ def handle_trade_message(message):
 
         print(f"📥 Trade | {timestamp.strftime('%H:%M:%S')} | Side: {side} | Qty: {qty} | Price: {price}", flush=True)
 
+        last_trade_time = datetime.now(TIMEZONE)
+
         with lock:
             trade_data.append({
                 "timestamp": timestamp,
@@ -58,6 +63,7 @@ def handle_trade_message(message):
                 "price": price,
             })
 
+            # Clean up old trades (> 24 hours)
             cutoff = datetime.now(TIMEZONE) - timedelta(hours=24)
             trade_data[:] = [t for t in trade_data if t["timestamp"] > cutoff]
 
@@ -78,6 +84,16 @@ def start_websocket():
         except Exception as e:
             print("❌ WebSocket error:", e)
             sleep(5)
+
+def websocket_watchdog():
+    global last_trade_time
+    while True:
+        now = datetime.now(TIMEZONE)
+        elapsed = (now - last_trade_time).total_seconds()
+        if elapsed > 300:  # 5 minutes
+            print(f"❗ No trades received for {elapsed/60:.1f} minutes. Restarting process.")
+            os._exit(1)  # force restart to trigger Render restart
+        sleep(60)
 
 def send_email(subject, body):
     sender = os.getenv("EMAIL_SENDER")
@@ -136,6 +152,7 @@ def aggregate_and_alert():
             f"💵 USD Volume: {int(usd_volume):,}\n"
             f"📈 Trading Frequency: {trading_freq:.2f}%"
         )
+
     send_email("🪙 Bybit MONUSDT Report", body)
 
 def schedule_loop():
@@ -157,6 +174,7 @@ def start():
     Thread(target=start_websocket).start()
     Thread(target=schedule_loop).start()
     Thread(target=schedule_heartbeat).start()
+    Thread(target=websocket_watchdog).start()
 
 if __name__ == "__main__":
     start()
