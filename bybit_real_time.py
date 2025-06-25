@@ -14,30 +14,29 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Setup timezone
+# Timezone
 TIMEZONE = pytz.timezone("Asia/Kuala_Lumpur")
 
-# Flask app for uptime checks
+# Web Flask heartbeat
 app = Flask(__name__)
-
 @app.route("/")
 def home():
     return "✅ Heartbeat check — service is running."
 
-# Global trade store
+# Global state
 trade_data = []
 lock = Lock()
 last_trade_time = datetime.now(TIMEZONE)
+ws = None  # Global WebSocket instance
 
-# Logging setup
+# Logging
 logging.basicConfig(level=logging.INFO)
-
 def log_heartbeat():
     logging.info("✅ Heartbeat check — service is running.")
 
+# Trade message handler
 def handle_trade_message(message):
     global last_trade_time
-
     if 'data' not in message:
         return
 
@@ -53,8 +52,6 @@ def handle_trade_message(message):
 
         print(f"📥 Trade | {timestamp.strftime('%H:%M:%S')} | Side: {side} | Qty: {qty} | Price: {price}", flush=True)
 
-        last_trade_time = datetime.now(TIMEZONE)
-
         with lock:
             trade_data.append({
                 "timestamp": timestamp,
@@ -62,22 +59,17 @@ def handle_trade_message(message):
                 "qty": qty,
                 "price": price,
             })
-
-            # Clean up old trades (> 24 hours)
             cutoff = datetime.now(TIMEZONE) - timedelta(hours=24)
             trade_data[:] = [t for t in trade_data if t["timestamp"] > cutoff]
+            last_trade_time = datetime.now(TIMEZONE)
 
-def start_websocket():
+# WebSocket runner
+def run_websocket():
+    global ws
     while True:
         try:
-            ws = WebSocket(
-                testnet=False,
-                channel_type="spot"
-            )
-            ws.trade_stream(
-                symbol="MONUSDT",
-                callback=handle_trade_message
-            )
+            ws = WebSocket(testnet=False, channel_type="spot")
+            ws.trade_stream(symbol="MONUSDT", callback=handle_trade_message)
             print("✅ WebSocket connected")
             while True:
                 sleep(60)
@@ -85,16 +77,23 @@ def start_websocket():
             print("❌ WebSocket error:", e)
             sleep(5)
 
+# WebSocket liveness watchdog
 def websocket_watchdog():
-    global last_trade_time
+    global ws
     while True:
-        now = datetime.now(TIMEZONE)
-        elapsed = (now - last_trade_time).total_seconds()
-        if elapsed > 300:  # 5 minutes
-            print(f"❗ No trades received for {elapsed/60:.1f} minutes. Restarting process.")
-            os._exit(1)  # force restart to trigger Render restart
         sleep(60)
+        now = datetime.now(TIMEZONE)
+        if (now - last_trade_time).total_seconds() > 300:  # > 5 minutes
+            print("⚠️ No trade received in 5 minutes. Reconnecting WebSocket...")
+            try:
+                if ws:
+                    ws.stop()
+                    ws = None
+            except Exception as e:
+                print("❌ Error during ws.stop():", e)
+            Thread(target=run_websocket).start()
 
+# Email sender
 def send_email(subject, body):
     sender = os.getenv("EMAIL_SENDER")
     recipients = os.getenv("EMAIL_RECIPIENTS").split(",")
@@ -114,10 +113,10 @@ def send_email(subject, body):
     except Exception as e:
         print(f"❌ Email error: {e}")
 
+# Email report scheduler
 def aggregate_and_alert():
     with lock:
         now = datetime.now(TIMEZONE)
-
         if now.hour == 6:
             cutoff = now - timedelta(hours=6)
             window_desc = "Past 6 hours (12 AM to 6 AM)"
@@ -132,7 +131,6 @@ def aggregate_and_alert():
             max_minutes = 24 * 60
 
         recent = [t for t in trade_data if t["timestamp"] > cutoff]
-
         buy_volume = sum(t["qty"] for t in recent if t["side"] == "Buy")
         sell_volume = sum(t["qty"] for t in recent if t["side"] == "Sell")
         usd_volume = sum(t["qty"] * t["price"] for t in recent)
@@ -152,29 +150,27 @@ def aggregate_and_alert():
             f"💵 USD Volume: {int(usd_volume):,}\n"
             f"📈 Trading Frequency: {trading_freq:.2f}%"
         )
-
     send_email("🪙 Bybit MONUSDT Report", body)
 
+# Scheduler loop
 def schedule_loop():
-    schedule.every().day.at("22:00").do(aggregate_and_alert)
     schedule.every().day.at("10:00").do(aggregate_and_alert)
+    schedule.every().day.at("22:00").do(aggregate_and_alert)
     while True:
         schedule.run_pending()
         sleep(1)
 
+# Heartbeat scheduler
 def schedule_heartbeat():
     schedule.every(1).minute.do(log_heartbeat)
 
-def run_web():
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
-
+# Start app
 def start():
-    Thread(target=run_web).start()
-    Thread(target=start_websocket).start()
+    Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))).start()
+    Thread(target=run_websocket).start()
+    Thread(target=websocket_watchdog).start()
     Thread(target=schedule_loop).start()
     Thread(target=schedule_heartbeat).start()
-    Thread(target=websocket_watchdog).start()
 
 if __name__ == "__main__":
     start()
