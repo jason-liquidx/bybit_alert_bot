@@ -1,6 +1,6 @@
 from pybit.unified_trading import WebSocket
 from datetime import datetime, timedelta
-from threading import Lock, Thread
+from threading import Lock, Thread, Event
 from time import sleep
 from flask import Flask
 import smtplib
@@ -14,27 +14,25 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-# Timezone
 TIMEZONE = pytz.timezone("Asia/Kuala_Lumpur")
-
-# Web Flask heartbeat
 app = Flask(__name__)
+
 @app.route("/")
 def home():
     return "✅ Heartbeat check — service is running."
 
-# Global state
 trade_data = []
 lock = Lock()
 last_trade_time = datetime.now(TIMEZONE)
-ws = None  # Global WebSocket instance
+ws = None
+reconnect_event = Event()
 
 # Logging
 logging.basicConfig(level=logging.INFO)
 def log_heartbeat():
     logging.info("✅ Heartbeat check — service is running.")
 
-# Trade message handler
+# Handle trade messages
 def handle_trade_message(message):
     global last_trade_time
     if 'data' not in message:
@@ -63,7 +61,7 @@ def handle_trade_message(message):
             trade_data[:] = [t for t in trade_data if t["timestamp"] > cutoff]
             last_trade_time = datetime.now(TIMEZONE)
 
-# WebSocket runner
+# WebSocket connection handler with auto-reconnect
 def run_websocket():
     global ws
     while True:
@@ -71,29 +69,32 @@ def run_websocket():
             ws = WebSocket(testnet=False, channel_type="spot")
             ws.trade_stream(symbol="MONUSDT", callback=handle_trade_message)
             print("✅ WebSocket connected")
-            while True:
-                sleep(60)
+            while not reconnect_event.wait(timeout=60):
+                pass
         except Exception as e:
             print("❌ WebSocket error:", e)
+        finally:
+            if ws:
+                try:
+                    ws.stop()
+                    print("🔌 WebSocket stopped")
+                except Exception as e:
+                    print("❌ Error stopping WebSocket:", e)
+                ws = None
+            print("🔁 Reconnecting WebSocket in 5 seconds...")
             sleep(5)
+            reconnect_event.clear()
 
 # WebSocket liveness watchdog
 def websocket_watchdog():
-    global ws
     while True:
         sleep(60)
         now = datetime.now(TIMEZONE)
-        if (now - last_trade_time).total_seconds() > 300:  # > 5 minutes
-            print("⚠️ No trade received in 5 minutes. Reconnecting WebSocket...")
-            try:
-                if ws:
-                    ws.stop()
-                    ws = None
-            except Exception as e:
-                print("❌ Error during ws.stop():", e)
-            Thread(target=run_websocket).start()
+        if (now - last_trade_time).total_seconds() > 300:
+            print("⚠️ No trade in 5 minutes. Triggering reconnect...")
+            reconnect_event.set()
 
-# Email sender
+# Email sending function
 def send_email(subject, body):
     sender = os.getenv("EMAIL_SENDER")
     recipients = os.getenv("EMAIL_RECIPIENTS").split(",")
@@ -113,7 +114,7 @@ def send_email(subject, body):
     except Exception as e:
         print(f"❌ Email error: {e}")
 
-# Email report scheduler
+# Scheduled email reports
 def aggregate_and_alert():
     with lock:
         now = datetime.now(TIMEZONE)
@@ -152,7 +153,7 @@ def aggregate_and_alert():
         )
     send_email("🪙 Bybit MONUSDT Report", body)
 
-# Scheduler loop
+# Scheduling tasks
 def schedule_loop():
     schedule.every().day.at("10:00").do(aggregate_and_alert)
     schedule.every().day.at("22:00").do(aggregate_and_alert)
@@ -160,17 +161,16 @@ def schedule_loop():
         schedule.run_pending()
         sleep(1)
 
-# Heartbeat scheduler
 def schedule_heartbeat():
     schedule.every(1).minute.do(log_heartbeat)
 
-# Start app
+# Entry point
 def start():
     Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))).start()
-    Thread(target=run_websocket).start()
-    Thread(target=websocket_watchdog).start()
-    Thread(target=schedule_loop).start()
-    Thread(target=schedule_heartbeat).start()
+    Thread(target=run_websocket, daemon=True).start()
+    Thread(target=websocket_watchdog, daemon=True).start()
+    Thread(target=schedule_loop, daemon=True).start()
+    Thread(target=schedule_heartbeat, daemon=True).start()
 
 if __name__ == "__main__":
     start()
