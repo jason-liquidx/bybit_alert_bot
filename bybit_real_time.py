@@ -17,7 +17,7 @@ from supabase import create_client
 # === Supabase Credentials ===
 SUPABASE_URL = "https://sjsezcsfevhehgprugye.supabase.co"
 SUPABASE_API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNqc2V6Y3NmZXZoZWhncHJ1Z3llIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTIwMjgxNzAsImV4cCI6MjA2NzYwNDE3MH0.kDcrtyBoNmHcu2AItmf3HKXzS8AuIfzCt8_hWx_DYdg"
-supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+supabase = create_client(SUPABASE_URL, SUPABASE_API_KEY)
 
 # === Timezone and Flask App ===
 TIMEZONE = pytz.timezone("Asia/Kuala_Lumpur")
