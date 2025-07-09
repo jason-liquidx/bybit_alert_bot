@@ -4,3 +4,6 @@ pytz
 schedule
 flask
 gunicorn
+supabase
+httpx
+
