@@ -49,9 +49,9 @@ def insert_to_supabase(timestamp, side, qty, price, symbol="MONUSDT", source="by
         "ts": timestamp.isoformat(),
         "side": side,
         "qty": qty,
-        "price": price,
-        "symbol": symbol,
-        "source": source
+        "price": price
+        # "symbol": symbol,
+        # "source": source
     }
     try:
         resp = requests.post(f"{SUPABASE_URL}/rest/v1/trades", headers=headers, data=json.dumps(payload))
