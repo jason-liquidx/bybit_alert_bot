@@ -210,7 +210,7 @@ def schedule_heartbeat():
 
 # === Start Everything ===
 def start():
-    Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 8080)))).start()
+    Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ["PORT"]))).start()
     Thread(target=run_websocket, daemon=True).start()
     Thread(target=websocket_watchdog, daemon=True).start()
     Thread(target=schedule_loop, daemon=True).start()
