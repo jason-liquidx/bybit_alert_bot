@@ -209,12 +209,18 @@ def schedule_heartbeat():
     schedule.every(1).minute.do(log_heartbeat)
 
 # === Start Everything ===
-def start():
-    Thread(target=lambda: app.run(host="0.0.0.0", port=int(os.environ["PORT"]))).start()
+def start_background_tasks():
     Thread(target=run_websocket, daemon=True).start()
     Thread(target=websocket_watchdog, daemon=True).start()
     Thread(target=schedule_loop, daemon=True).start()
     Thread(target=schedule_heartbeat, daemon=True).start()
 
 if __name__ == "__main__":
-    start()
+    # Only for local/dev use
+    start_background_tasks()
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
+
+# === Gunicorn hook ===
+def when_ready(server):
+    print("🚀 Gunicorn is ready. Starting background tasks...")
+    start_background_tasks()
