@@ -215,12 +215,14 @@ def start_background_tasks():
     Thread(target=schedule_loop, daemon=True).start()
     Thread(target=schedule_heartbeat, daemon=True).start()
 
-if __name__ == "__main__":
-    # Only for local/dev use
-    start_background_tasks()
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
-
-# === Gunicorn hook ===
+# === Gunicorn hook (Render uses this automatically) ===
 def when_ready(server):
-    print("🚀 Gunicorn is ready. Starting background tasks...")
+    print("🚀 Gunicorn is ready. Starting background tasks...", flush=True)
     start_background_tasks()
+
+# === Local dev runner ===
+if __name__ == "__main__":
+    print("🔧 Running locally — starting Flask + background tasks", flush=True)
+    start_background_tasks()
+    port = int(os.environ.get("PORT", 10000))  # Render usually injects $PORT
+    app.run(host="0.0.0.0", port=port)
